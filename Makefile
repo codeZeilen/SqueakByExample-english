@@ -33,7 +33,7 @@ all : book
 # NB: be sure to use texlive and to set the TEXINPUTS variable accordingly
 # See README.txt
 
-book: clean listings index book-pages
+book: clean listings book-pages
 
 book-pages :
 	time ${PDFLATEX} '${TEXINPUT}'
