@@ -21,6 +21,7 @@ ifndef TRAVIS
 else
 	PDFLATEX = docker run -v $(CURDIR):/src tom95/texlive-docker-swa pdflatex -interaction=nonstopmode
 	BIBTEX = docker run -v $(CURDIR):/src tom95/texlive-docker-swa bibtex
+	MAKEINDEX = docker run -v $(CURDIR):/src tom95/texlive-docker-swa makeindex
 endif
 
 BOOK=SBE
