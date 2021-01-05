@@ -54,7 +54,7 @@ index :
 	${MAKEINDEX} ${BOOK}
 
 complete : book index
-	time ${PDFLATEX} ${BOOK}
+	time ${PDFLATEX} '${TEXINPUT}'
 
 etc :
 	time ${PDFLATEX} ${ETC}
