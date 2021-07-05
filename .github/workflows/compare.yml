@@ -1,0 +1,92 @@
+name: ⚖ Compare
+
+on:
+  workflow_run:
+    workflows: ["📕 Make Book"]
+    types: [completed]
+
+jobs:
+  find-prs:
+    runs-on: ubuntu-latest
+    outputs:
+      prs: ${{ steps.find-prs.outputs.prs }}
+    steps:
+      - id: find-prs
+        uses: actions/github-script@v4
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const query = `query ($owner: String!, $name: String!, $baseRefName: String!) {
+              repository(owner: $owner, name: $name) {
+                pullRequests(first: 100, baseRefName: $baseRefName) {
+                  nodes {
+                    id
+                    headRefName
+                    number
+                  }
+                }
+              }
+            }`
+            const variables = {
+              owner: context.repo.owner,
+              name: context.repo.repo,
+              baseRefName: 'master'
+            }
+            const result = await github.graphql(query, variables);
+            return result.repository.pullRequests.nodes
+  diff:
+    needs: find-prs
+    strategy:
+      matrix:
+        pr: ${{ fromJson(needs.find-prs.outputs.prs) }}
+        smalltalk: [Trunk, 5.3]
+    runs-on: windows-latest
+    steps:
+      - name: Setup comparepdfcmd
+        run: |
+          curl http://www.qtrac.eu/comparepdfcmd-2.1.9.zip -o comparepdfcmd.zip
+          unzip comparepdfcmd.zip
+          ./comparepdfcmd/comparepdfcmd.exe try
+      - name: Find latest prelease
+        run: |
+          echo "::set-output name=sha::$(git describe --tags $(git rev-list origin/master --tags) | grep ^untagged- | head -n 1)\n"
+        id: find-latest-prerelease
+      - name: Load latest prereleases
+        uses: dsaltares/fetch-gh-release-asset@master
+        with:
+          repo: ${{ github.repository }}
+          version: ${{ steps.find-latest-prerelease.outputs.sha }}
+          file: SBE-${{ matrix.smalltalk }}.pdf
+          target: SBE-${{ matrix.smalltalk }}.old.pdf
+          token: ${{ github.token }}
+      - name: Download artifact
+        uses: dawidd6/action-download-artifact@v2
+        with:
+          github_token: ${{ github.token }}
+          #run_id: ${{ github.event.workflow_run.id }}
+          pr: ${{ matrix.pr.number }}
+          name: book-${{ matrix.smalltalk }}
+          path: SBE-${{ matrix.smalltalk }}.pdf
+      - name: Compare PDFs
+        run: |
+           comparepdfcmd.exe -r diff-${{ matrix.smalltalk }}.pdf SBE-${{ matrix.smalltalk }}.old.pdf SBE-${{ matrix.smalltalk }}.pdf
+      - name: Upload diffs
+        uses: actions/upload-artifact@master
+        with:
+          name: diff-${{ matrix.smalltalk }}
+          path: diff-${{ matrix.smalltalk }}.pdf
+      - name: Comment on PR
+        uses: actions/github-script@v4
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            github.issues.createComment({
+              issue_number: ${{ matrix.pr.number }},
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `
+                # PDF diff
+                
+                👋 Hey there, I created visual diff of the PDF! You can find it in the Actions section of the repository.
+              `
+            })
